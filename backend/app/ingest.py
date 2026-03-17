@@ -6,46 +6,34 @@ def _read_text_file(path: str) -> str:
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         return f.read()
 
-def _md_sections(text: str) -> List[Tuple[str, str]]:
-    #     # Very simple section splitter by Markdown headings
-    # parts = re.split(r"\n(?=#+\s)", text)
-    # out = []
-    # for p in parts:
-    #     p = p.strip()
-    #     if not p:
-    #         continue
-    #     lines = p.splitlines()
-    #     title = lines[0].lstrip("# ").strip() if lines and lines[0].startswith("#") else "Body"
-    #     out.append((title, p))
-    # return out or [("Body", text)]
-    # 1. Get the Main Title of the document
-    main_title = "Policy Document"
-    m = re.search(r"^#\s+(.*)", text, re.M)
-    if m:
-        main_title = m.group(1).strip()
-
-    # 2. Split the text into sections using the sub-headers (##)
-    # This ensures "## Refund Windows" and its list stay together
-    sections = re.split(r"\n(?=##\s)", text)
+def _md_sections(text: str) -> List[Tuple[str, str, str]]:
+    # Split the document by sub-headers (##)
+    sections = re.split(r"\n(?=#+\s)", text)
     out = []
     
     for p in sections:
         p = p.strip()
         if not p: continue
-        
-        # Determine the section name (e.g., Refund Windows, Conditions)
         lines = p.splitlines()
-        if lines[0].startswith("##"):
-            section_name = lines[0].lstrip("# ").strip()
+        
+        # 1. Logic to identify the Section Name (always the first line)
+        first_line = lines[0]
+        section_name = first_line.lstrip("# ").strip()
+
+        # 2. Logic to strip the Header from the Body
+        # If the first line starts with # or ##, we remove it.
+        if first_line.startswith("#"):
+            body_text = "\n".join(lines[1:]).strip()
         else:
-            section_name = "Overview"
-        
-        # 3. CRITICAL FIX: Skip chunks that are just the main title
-        # These provide no information and "clog" the retrieval
-        if p == f"# {main_title}":
+            # If there's no header at all (unlikely), keep it all
+            body_text = p
+
+        # 3. Skip empty title-only chunks (Your smart logic)
+        if not body_text or (len(lines) < 2 and first_line.startswith("#")):
             continue
-        
-        out.append((section_name, p))
+
+        # Return: (Section Name, Clean Body, Full Original Text)
+        out.append((section_name, body_text, p))
         
     return out
 
@@ -63,15 +51,17 @@ def chunk_text(text: str, chunk_size: int, overlap: int) -> List[str]:
 def load_documents(data_dir: str) -> List[Dict]:
     docs = []
     for fname in sorted(os.listdir(data_dir)):
-        if not fname.lower().endswith((".md", ".txt")):
-            continue
+        if not fname.lower().endswith((".md", ".txt")): continue
         path = os.path.join(data_dir, fname)
         text = _read_text_file(path)
-        for section, body in _md_sections(text):
+        
+        # FIX: Unpack the 3 values now
+        for section, body, full in _md_sections(text):
             docs.append({
                 "title": fname,
                 "section": section,
-                "text": body
+                "text": body,      # The 'Clean' body
+                "full_text": full  # The 'Full' original chunk
             })
     return docs
 

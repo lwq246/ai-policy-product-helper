@@ -5,7 +5,7 @@ from .settings import settings
 from .ingest import chunk_text, doc_hash
 from qdrant_client import QdrantClient, models as qm
 import uuid  # Add this at the top
-
+from sentence_transformers import SentenceTransformer
 # ---- Simple local embedder (deterministic) ----
 def _tokenize(s: str) -> List[str]:
     return [t.lower() for t in s.split()]
@@ -13,16 +13,14 @@ def _tokenize(s: str) -> List[str]:
 class LocalEmbedder:
     def __init__(self, dim: int = 384):
         self.dim = dim
+        # This downloads a tiny (80MB) AI model that runs locally on your CPU
+        # It understands English meanings and synonyms
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
 
     def embed(self, text: str) -> np.ndarray:
-        # Hash-based repeatable pseudo-embedding
-        h = hashlib.sha1(text.encode("utf-8")).digest()
-        rng_seed = int.from_bytes(h[:8], "big") % (2**32-1)
-        rng = np.random.default_rng(rng_seed)
-        v = rng.standard_normal(self.dim).astype("float32")
-        # L2 normalize
-        v = v / (np.linalg.norm(v) + 1e-9)
-        return v
+        # This turns the MEANING of the text into math
+        embedding = self.model.encode(text)
+        return embedding.astype("float32")
 
 # ---- Vector store abstraction ----
 class InMemoryStore:
@@ -179,52 +177,28 @@ class RAGEngine:
             self.llm_name = "stub"
 
     def ingest_chunks(self, chunks: List[Dict]) -> Tuple[int, int]:
-        # vectors = []
-        # metas = []
-        # doc_titles_before = set(self._doc_titles)
-
-        # for ch in chunks:
-        #     text = ch["text"]
-        #     h = doc_hash(text)
-        #     point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
-
-        #     meta = {
-        #         "id": point_id,
-        #         "hash": h,
-        #         "title": ch["title"],
-        #         "section": ch.get("section"),
-        #         "text": text,
-        #     }
-        #     v = self.embedder.embed(text)
-        #     vectors.append(v)
-        #     metas.append(meta)
-        #     self._doc_titles.add(ch["title"])
-        #     self._chunk_count += 1
-
-        # self.store.upsert(vectors, metas)
-        # return (len(self._doc_titles) - len(doc_titles_before), len(metas))
         vectors = []
         metas = []
         doc_titles_before = set(self._doc_titles)
 
         for ch in chunks:
-            # 1. Create a unique fingerprint and convert it to a valid UUID for Qdrant
-            h = doc_hash(ch["text"])
-            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
-
-            # 2. THE EMBEDDING (The "Math" signal)
-            # We keep the title/section here so Qdrant can find the data easily
-            embedding_input = f"File: {ch['title']} | Section: {ch['section']} | Content: {ch['text']}"
-            v = self.embedder.embed(embedding_input)
+            # Use the 'Full' text for the Embedding (so math finds the header keywords)
+            # and use the 'Clean' text for the Payload (so the user sees clean text)
             
-            # 3. THE PAYLOAD (The "Clean" storage)
-            # We add 'id' here so the upsert logic can find it
+            full_p = ch.get("full_text", ch["text"])
+            clean_body = ch["text"]
+            print(ch["full_text"])
+            # 1. Math Signal (High Accuracy)
+            v = self.embedder.embed(ch["full_text"])           
+            h = doc_hash(clean_body)
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
+            
             meta = {
-                "id": point_id,            # <--- FIX: Added the UUID back
+                "id": point_id,
                 "hash": h,
-                "title": ch["title"],      
-                "section": ch["section"],  
-                "text": ch["text"]         # Clean! No labels in the database
+                "title": ch["title"],
+                "section": ch["section"],
+                "text": clean_body # Storing the cleaned text!
             }
             
             vectors.append(v)
@@ -233,10 +207,47 @@ class RAGEngine:
             self._chunk_count += 1
         
         self.store.upsert(vectors, metas)
+        return (len(self._doc_titles) - len(doc_titles_before), len(metas))
+        # vectors = []
+        # metas = []
+        # doc_titles_before = set(self._doc_titles)
+
+        # for ch in chunks:
+        #     # The raw text from ingest.py (includes the ## header)
+        #     full_text_chunk = ch["text"]
+            
+        #     # --- LOGIC TO SEPARATE HEADER FROM BODY ---
+        #     lines = full_text_chunk.splitlines()
+        #     # If there's more than one line, the first is the header, the rest is the clean body
+        #     if len(lines) > 1:
+        #         clean_body = "\n".join(lines[1:]).strip()
+        #     else:
+        #         clean_body = full_text_chunk # Fallback if no body exists
+                
+        #     # 1. Create unique ID
+        #     h = doc_hash(full_text_chunk)
+        #     point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
+
+        #     # 2. THE EMBEDDING (Uses the FULL content 'p' + Metadata for high accuracy)
+        #     v = self.embedder.embed(full_text_chunk)
+
+        #     # 3. THE PAYLOAD (Stores ONLY the clean body text)
+        #     meta = {
+        #         "title": ch["title"],
+        #         "section": ch["section"],
+        #         "text": clean_body, # <--- Clean text for the UI and AI reading
+        #         "hash": h,
+        #         "id": point_id
+        #     }
+            
+        #     vectors.append(v)
+        #     metas.append(meta)
+        #     self._doc_titles.add(ch["title"])
+        #     self._chunk_count += 1
         
-        # Calculate how many NEW unique documents were added
-        new_docs_count = len(self._doc_titles) - len(doc_titles_before)
-        return (new_docs_count, len(metas))
+        # self.store.upsert(vectors, metas)
+        # new_docs_count = len(self._doc_titles) - len(doc_titles_before)
+        # return (new_docs_count, len(metas))
 
     def retrieve(self, query: str, k: int = 4) -> List[Dict]:
         t0 = time.time()
@@ -277,6 +288,15 @@ class RAGEngine:
 def build_chunks_from_docs(docs: List[Dict], chunk_size: int, overlap: int) -> List[Dict]:
     out = []
     for d in docs:
-        for ch in chunk_text(d["text"], chunk_size, overlap):
-            out.append({"title": d["title"], "section": d["section"], "text": ch})
+        # For Markdown policy documents, the section splitting we did in ingest.py 
+        # is already the perfect "chunk". We don't need to arbitrarily split by words 
+        # anymore because it destroys the clean Markdown structure!
+        
+        # We simply pass the beautifully structured docs straight to the engine.
+        out.append({
+            "title": d["title"], 
+            "section": d["section"], 
+            "text": d["text"],           # The clean body for the database
+            "full_text": d.get("full_text", d["text"]) # The header version for the math
+        })
     return out
