@@ -145,63 +145,98 @@ class Metrics:
 class RAGEngine:
     def __init__(self):
         self.embedder = LocalEmbedder(dim=384)
-        # Vector store selection
+
+        # 1. INITIALIZE THE STORE (This must happen first!)
         if settings.vector_store == "qdrant":
-            print(f"--- ATTEMPTING TO CONNECT TO QDRANT AT: http://qdrant:6333 ---")
-            # We remove the try/except so if it fails, we see the error in logs
+            # This calls the QdrantStore class which has your retry loop
             self.store = QdrantStore(collection=settings.collection_name, dim=384)
-            print(f"--- SUCCESS: CONNECTED TO QDRANT COLLECTION: {settings.collection_name} ---")
-            # try:
-            #     self.store = QdrantStore(collection=settings.collection_name, dim=384)
-            # except Exception:
-            #     self.store = InMemoryStore(dim=384)
         else:
             self.store = InMemoryStore(dim=384)
 
-        # LLM selection
-        if settings.llm_provider == "openrouter" and settings.openrouter_api_key:
-            try:
-                self.llm = OpenRouterLLM(
-                    api_key=settings.openrouter_api_key,
-                    model=settings.llm_model,
-                )
-                self.llm_name = f"openrouter:{settings.llm_model}"
-            except Exception:
-                self.llm = StubLLM()
-                self.llm_name = "stub"
-        else:
-            self.llm = StubLLM()
-            self.llm_name = "stub"
-
+        # 2. INITIALIZE OTHER VARIABLES
         self.metrics = Metrics()
         self._doc_titles = set()
         self._chunk_count = 0
 
+        # 3. SYNC PERSISTENCE (Optional check for existing data)
+        if settings.vector_store == "qdrant":
+            try:
+                collection_info = self.store.client.get_collection(settings.collection_name)
+                self._chunk_count = collection_info.points_count
+                print(f"--- SUCCESS: Found {self._chunk_count} existing chunks in Qdrant ---")
+            except Exception as e:
+                print(f"--- NOTE: Collection empty or new: {e} ---")
+
+        # 4. LLM SELECTION
+        if settings.llm_provider == "openrouter" and settings.openrouter_api_key:
+            self.llm = OpenRouterLLM(
+                api_key=settings.openrouter_api_key,
+                model=settings.llm_model,
+            )
+            self.llm_name = f"openrouter:{settings.llm_model}"
+        else:
+            self.llm = StubLLM()
+            self.llm_name = "stub"
+
     def ingest_chunks(self, chunks: List[Dict]) -> Tuple[int, int]:
+        # vectors = []
+        # metas = []
+        # doc_titles_before = set(self._doc_titles)
+
+        # for ch in chunks:
+        #     text = ch["text"]
+        #     h = doc_hash(text)
+        #     point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
+
+        #     meta = {
+        #         "id": point_id,
+        #         "hash": h,
+        #         "title": ch["title"],
+        #         "section": ch.get("section"),
+        #         "text": text,
+        #     }
+        #     v = self.embedder.embed(text)
+        #     vectors.append(v)
+        #     metas.append(meta)
+        #     self._doc_titles.add(ch["title"])
+        #     self._chunk_count += 1
+
+        # self.store.upsert(vectors, metas)
+        # return (len(self._doc_titles) - len(doc_titles_before), len(metas))
         vectors = []
         metas = []
         doc_titles_before = set(self._doc_titles)
 
         for ch in chunks:
-            text = ch["text"]
-            h = doc_hash(text)
+            # 1. Create a unique fingerprint and convert it to a valid UUID for Qdrant
+            h = doc_hash(ch["text"])
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
 
+            # 2. THE EMBEDDING (The "Math" signal)
+            # We keep the title/section here so Qdrant can find the data easily
+            embedding_input = f"File: {ch['title']} | Section: {ch['section']} | Content: {ch['text']}"
+            v = self.embedder.embed(embedding_input)
+            
+            # 3. THE PAYLOAD (The "Clean" storage)
+            # We add 'id' here so the upsert logic can find it
             meta = {
-                "id": point_id,
+                "id": point_id,            # <--- FIX: Added the UUID back
                 "hash": h,
-                "title": ch["title"],
-                "section": ch.get("section"),
-                "text": text,
+                "title": ch["title"],      
+                "section": ch["section"],  
+                "text": ch["text"]         # Clean! No labels in the database
             }
-            v = self.embedder.embed(text)
+            
             vectors.append(v)
             metas.append(meta)
             self._doc_titles.add(ch["title"])
             self._chunk_count += 1
-
+        
         self.store.upsert(vectors, metas)
-        return (len(self._doc_titles) - len(doc_titles_before), len(metas))
+        
+        # Calculate how many NEW unique documents were added
+        new_docs_count = len(self._doc_titles) - len(doc_titles_before)
+        return (new_docs_count, len(metas))
 
     def retrieve(self, query: str, k: int = 4) -> List[Dict]:
         t0 = time.time()
@@ -218,9 +253,21 @@ class RAGEngine:
 
     def stats(self) -> Dict:
         m = self.metrics.summary()
+        
+        # Ask Qdrant for the REAL count right now
+        actual_chunks = 0
+        if settings.vector_store == "qdrant":
+            try:
+                info = self.store.client.get_collection(self.store.collection)
+                actual_chunks = info.points_count
+            except:
+                actual_chunks = self._chunk_count # fallback
+        else:
+            actual_chunks = self._chunk_count
+
         return {
-            "total_docs": len(self._doc_titles),
-            "total_chunks": self._chunk_count,
+            "total_docs": len(self._doc_titles), # This will still reset unless you scroll Qdrant
+            "total_chunks": actual_chunks,      # This will now show the real DB count!
             "embedding_model": settings.embedding_model,
             "llm_model": self.llm_name,
             **m

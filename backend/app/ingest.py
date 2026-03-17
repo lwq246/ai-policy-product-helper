@@ -7,17 +7,47 @@ def _read_text_file(path: str) -> str:
         return f.read()
 
 def _md_sections(text: str) -> List[Tuple[str, str]]:
-    # Very simple section splitter by Markdown headings
-    parts = re.split(r"\n(?=#+\s)", text)
+    #     # Very simple section splitter by Markdown headings
+    # parts = re.split(r"\n(?=#+\s)", text)
+    # out = []
+    # for p in parts:
+    #     p = p.strip()
+    #     if not p:
+    #         continue
+    #     lines = p.splitlines()
+    #     title = lines[0].lstrip("# ").strip() if lines and lines[0].startswith("#") else "Body"
+    #     out.append((title, p))
+    # return out or [("Body", text)]
+    # 1. Get the Main Title of the document
+    main_title = "Policy Document"
+    m = re.search(r"^#\s+(.*)", text, re.M)
+    if m:
+        main_title = m.group(1).strip()
+
+    # 2. Split the text into sections using the sub-headers (##)
+    # This ensures "## Refund Windows" and its list stay together
+    sections = re.split(r"\n(?=##\s)", text)
     out = []
-    for p in parts:
+    
+    for p in sections:
         p = p.strip()
-        if not p:
-            continue
+        if not p: continue
+        
+        # Determine the section name (e.g., Refund Windows, Conditions)
         lines = p.splitlines()
-        title = lines[0].lstrip("# ").strip() if lines and lines[0].startswith("#") else "Body"
-        out.append((title, p))
-    return out or [("Body", text)]
+        if lines[0].startswith("##"):
+            section_name = lines[0].lstrip("# ").strip()
+        else:
+            section_name = "Overview"
+        
+        # 3. CRITICAL FIX: Skip chunks that are just the main title
+        # These provide no information and "clog" the retrieval
+        if p == f"# {main_title}":
+            continue
+        
+        out.append((section_name, p))
+        
+    return out
 
 def chunk_text(text: str, chunk_size: int, overlap: int) -> List[str]:
     tokens = text.split()
