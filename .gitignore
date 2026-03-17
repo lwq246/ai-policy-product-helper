@@ -32,36 +32,3 @@ Thumbs.db
 
 # Misc
 *.log
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.env
-*.env
-*.sqlite3
-
-# Node/Next.js
-node_modules/
-.next/
-out/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-package-lock.json
-
-# Docker
-qdrant_data/
-*.pid
-
-# VSCode/IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Misc
-*.log

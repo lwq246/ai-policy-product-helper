@@ -4,6 +4,7 @@ import numpy as np
 from .settings import settings
 from .ingest import chunk_text, doc_hash
 from qdrant_client import QdrantClient, models as qm
+import uuid  # Add this at the top
 
 # ---- Simple local embedder (deterministic) ----
 def _tokenize(s: str) -> List[str]:
@@ -57,6 +58,7 @@ class QdrantStore:
         self.collection = collection
         self.dim = dim
         self._ensure_collection()
+        
 
     def _ensure_collection(self):
         try:
@@ -115,7 +117,8 @@ class OpenRouterLLM:
         resp = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role":"user","content":prompt}],
-            temperature=0.1
+            temperature=0.1,
+             max_tokens=500
         )
         return resp.choices[0].message.content
 
@@ -144,10 +147,14 @@ class RAGEngine:
         self.embedder = LocalEmbedder(dim=384)
         # Vector store selection
         if settings.vector_store == "qdrant":
-            try:
-                self.store = QdrantStore(collection=settings.collection_name, dim=384)
-            except Exception:
-                self.store = InMemoryStore(dim=384)
+            print(f"--- ATTEMPTING TO CONNECT TO QDRANT AT: http://qdrant:6333 ---")
+            # We remove the try/except so if it fails, we see the error in logs
+            self.store = QdrantStore(collection=settings.collection_name, dim=384)
+            print(f"--- SUCCESS: CONNECTED TO QDRANT COLLECTION: {settings.collection_name} ---")
+            # try:
+            #     self.store = QdrantStore(collection=settings.collection_name, dim=384)
+            # except Exception:
+            #     self.store = InMemoryStore(dim=384)
         else:
             self.store = InMemoryStore(dim=384)
 
@@ -178,8 +185,10 @@ class RAGEngine:
         for ch in chunks:
             text = ch["text"]
             h = doc_hash(text)
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
+
             meta = {
-                "id": h,
+                "id": point_id,
                 "hash": h,
                 "title": ch["title"],
                 "section": ch.get("section"),
