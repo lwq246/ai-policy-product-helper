@@ -14,10 +14,9 @@ services:
   backend:
     build: ./backend
     environment:
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-local-384}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
       - LLM_PROVIDER=${LLM_PROVIDER:-stub}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - VECTOR_STORE=${VECTOR_STORE:-qdrant}
       - COLLECTION_NAME=${COLLECTION_NAME:-policy_helper}

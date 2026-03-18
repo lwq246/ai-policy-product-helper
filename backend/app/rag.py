@@ -217,46 +217,6 @@ class RAGEngine:
         
         new_docs_count = len(self._doc_titles) - len(doc_titles_before)
         return (new_docs_count, len(metas))
-        # vectors = []
-        # metas = []
-        # doc_titles_before = set(self._doc_titles)
-
-        # for ch in chunks:
-        #     # The raw text from ingest.py (includes the ## header)
-        #     full_text_chunk = ch["text"]
-            
-        #     # --- LOGIC TO SEPARATE HEADER FROM BODY ---
-        #     lines = full_text_chunk.splitlines()
-        #     # If there's more than one line, the first is the header, the rest is the clean body
-        #     if len(lines) > 1:
-        #         clean_body = "\n".join(lines[1:]).strip()
-        #     else:
-        #         clean_body = full_text_chunk # Fallback if no body exists
-                
-        #     # 1. Create unique ID
-        #     h = doc_hash(full_text_chunk)
-        #     point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
-
-        #     # 2. THE EMBEDDING (Uses the FULL content 'p' + Metadata for high accuracy)
-        #     v = self.embedder.embed(full_text_chunk)
-
-        #     # 3. THE PAYLOAD (Stores ONLY the clean body text)
-        #     meta = {
-        #         "title": ch["title"],
-        #         "section": ch["section"],
-        #         "text": clean_body, # <--- Clean text for the UI and AI reading
-        #         "hash": h,
-        #         "id": point_id
-        #     }
-            
-        #     vectors.append(v)
-        #     metas.append(meta)
-        #     self._doc_titles.add(ch["title"])
-        #     self._chunk_count += 1
-        
-        # self.store.upsert(vectors, metas)
-        # new_docs_count = len(self._doc_titles) - len(doc_titles_before)
-        # return (new_docs_count, len(metas))
 
     def retrieve(self, query: str, k: int = 4) -> List[Dict]:
         t0 = time.time()

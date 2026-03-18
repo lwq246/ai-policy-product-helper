@@ -36,7 +36,8 @@ During development, I refactored the skeleton starter pack to resolve critical i
 - **Decoupled Embedding Strategy:** I optimized retrieval accuracy by generating vectors from a "Rich Signal" string (Document Title + Section + Content) to maximize semantic weight. However, I maintained a **"Clean Body"** storage strategy in the database payload. This ensures the AI finds the correct data with high confidence while the UI remains professional and non-redundant.
 - **Deterministic Data Lifecycle (UUID5):** To satisfy Qdrant's strict schema requirements and ensure data integrity, I implemented **UUID5 mapping** derived from content hashes. This makes the ingestion process **Idempotent**—re-running ingestion updates existing points instead of creating duplicates.
 - **Semantic Embedding Upgrade:** I replaced the placeholder hash-based embedding function with a state-of-the-art transformer model (`all-MiniLM-L6-v2`). This enables true **Semantic Search**, allowing the system to understand synonyms and context (e.g., matching "broken" with "defective") rather than relying on simple keyword or hash matching.
-- **UX & Display Filtering:** I implemented a custom sanitization filter in the React frontend to strip technical Markdown artifacts (`#`, `##`) from citation views. This provides a clean, "quote-style" experience for the user while preserving the structural headers necessary for the AI's internal reasoning.
+- **Chunk Quality Control:** I refactored the Markdown splitter to prevent "Header-Only Chunks." The original logic created empty segments when two headers appeared in a row (e.g., a Title followed by a Sub-title). I implemented a structural filter to discard these noisy, information-poor chunks, ensuring every piece of data retrieved by the AI contains actual policy content.
+- **Ingestion-Level Sanitization:** I refactored the backend ingestion pipeline to strip technical Markdown artifacts (#, ##) from the stored text. By isolating the policy body from its header during chunking, the system ensures a clean, professional "quote-style" display in the UI while preserving metadata for precise citations.
 - **Startup State Hydration:** The backend performs a handshake with Qdrant upon boot to hydrate system metrics. This ensures that document counts and system status are accurate immediately upon restart, fulfilling the **"Local-First"** persistence requirement.
 
 ## 🔄 LLM Implementation & Changes
@@ -57,6 +58,8 @@ docker compose run --rm -e PYTHONPATH=. backend pytest
 ```
 
 **Test Results**
+
+![Test](/public/test.png)
 
 - **test_health**: PASSED  
   _Backend reachability verified._
