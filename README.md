@@ -39,6 +39,13 @@ During development, I refactored the skeleton starter pack to resolve critical i
 - **UX & Display Filtering:** I implemented a custom sanitization filter in the React frontend to strip technical Markdown artifacts (`#`, `##`) from citation views. This provides a clean, "quote-style" experience for the user while preserving the structural headers necessary for the AI's internal reasoning.
 - **Startup State Hydration:** The backend performs a handshake with Qdrant upon boot to hydrate system metrics. This ensures that document counts and system status are accurate immediately upon restart, fulfilling the **"Local-First"** persistence requirement.
 
+## 🔄 LLM Implementation & Changes
+
+As per the requirement to use a real LLM for the demo, the following changes were implemented:
+
+- **Provider Switch:** Successfully transitioned from the `stub` provider to `openrouter` by configuring environment variables and initializing the `OpenRouterLLM` class.
+- **Cost & Budget Control:** Added a `max_tokens=500` limit to the OpenRouter completion call. This ensures the system remains within credit limits while providing concise, actionable answers.
+
 ## 🧪 Testing & Validation
 
 The API logic and RAG pipeline are validated using `pytest` within the containerized environment.
