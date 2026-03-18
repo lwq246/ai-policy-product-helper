@@ -35,7 +35,7 @@ During development, I refactored the skeleton starter pack to resolve critical i
 
 - **Decoupled Embedding Strategy:** I optimized retrieval accuracy by generating vectors from a "Rich Signal" string (Document Title + Section + Content) to maximize semantic weight. However, I maintained a **"Clean Body"** storage strategy in the database payload. This ensures the AI finds the correct data with high confidence while the UI remains professional and non-redundant.
 - **Deterministic Data Lifecycle (UUID5):** To satisfy Qdrant's strict schema requirements and ensure data integrity, I implemented **UUID5 mapping** derived from content hashes. This makes the ingestion process **Idempotent**—re-running ingestion updates existing points instead of creating duplicates.
-- **Orchestration Resilience:** I resolved cross-platform build context issues and replaced brittle Docker healthchecks with a robust **Application-Level Retry Loop**. This handles the race condition between the database and backend during startup, ensuring stable connectivity across Windows/WSL2 and Linux environments.
+- **Semantic Embedding Upgrade:** I replaced the placeholder hash-based embedding function with a state-of-the-art transformer model (`all-MiniLM-L6-v2`). This enables true **Semantic Search**, allowing the system to understand synonyms and context (e.g., matching "broken" with "defective") rather than relying on simple keyword or hash matching.
 - **UX & Display Filtering:** I implemented a custom sanitization filter in the React frontend to strip technical Markdown artifacts (`#`, `##`) from citation views. This provides a clean, "quote-style" experience for the user while preserving the structural headers necessary for the AI's internal reasoning.
 - **Startup State Hydration:** The backend performs a handshake with Qdrant upon boot to hydrate system metrics. This ensures that document counts and system status are accurate immediately upon restart, fulfilling the **"Local-First"** persistence requirement.
 
@@ -61,10 +61,10 @@ docker compose run --rm -e PYTHONPATH=. backend pytest
 
 As seen in the Admin Panel, the system provides real-time observability:
 
-- **Retrieval Latency**: ~10–25 ms  
+- **Retrieval Latency:** ~21ms
   _Optimized via local Qdrant indexing._
 
-- **Generation Latency**: ~2.5–4 s  
+- **Generation Latency:** ~3.2s  
   _Standard latency for cloud-based reasoning._
 
 - **Data Density**: Documents are intelligently chunked based on Markdown headers  
