@@ -6,7 +6,7 @@ def _read_text_file(path: str) -> str:
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         return f.read()
 
-def _md_sections(text: str) -> List[Tuple[str, str, str]]:
+def _md_sections(text: str) -> List[Tuple[str, str]]:
     # Split the document by sub-headers (##)
     sections = re.split(r"\n(?=#+\s)", text)
     out = []
@@ -32,8 +32,8 @@ def _md_sections(text: str) -> List[Tuple[str, str, str]]:
         if not body_text or (len(lines) < 2 and first_line.startswith("#")):
             continue
 
-        # Return: (Section Name, Clean Body, Full Original Text)
-        out.append((section_name, body_text, p))
+        # Return: (Section Name, Clean Body)
+        out.append((section_name, body_text))
         
     return out
 
@@ -55,13 +55,12 @@ def load_documents(data_dir: str) -> List[Dict]:
         path = os.path.join(data_dir, fname)
         text = _read_text_file(path)
         
-        # FIX: Unpack the 3 values now
-        for section, body, full in _md_sections(text):
+        # FIX: Unpack the 2 values now
+        for section, body in _md_sections(text):
             docs.append({
                 "title": fname,
                 "section": section,
                 "text": body,      # The 'Clean' body
-                "full_text": full  # The 'Full' original chunk
             })
     return docs
 

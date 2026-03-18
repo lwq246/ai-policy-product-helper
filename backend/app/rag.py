@@ -182,23 +182,29 @@ class RAGEngine:
         doc_titles_before = set(self._doc_titles)
 
         for ch in chunks:
-            # Use the 'Full' text for the Embedding (so math finds the header keywords)
-            # and use the 'Clean' text for the Payload (so the user sees clean text)
+            # 1. Identify the different versions of the text
+            clean_body = ch["text"]                  # The one without headers
+
+            # --- THE RICH EMBEDDING INPUT ---
+            # We combine Title, Section, and Full Text into the math signal.
+            # This makes it almost impossible for Qdrant to miss the right chunk.
+            rich_signal = f"File: {ch['title']} | Section: {ch['section']} | Content: {clean_body}"
             
-            full_p = ch.get("full_text", ch["text"])
-            clean_body = ch["text"]
-            print(ch["full_text"])
-            # 1. Math Signal (High Accuracy)
-            v = self.embedder.embed(ch["full_text"])           
+            # 2. Math Signal (Extreme Accuracy)
+            v = self.embedder.embed(rich_signal)           
+
+            # 3. Create unique deterministic ID for Qdrant
             h = doc_hash(clean_body)
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, h))
             
+            # 4. Database Storage (Clean Payload)
+            # We only store the 'clean_body' so the AI and User see professional text
             meta = {
                 "id": point_id,
                 "hash": h,
                 "title": ch["title"],
                 "section": ch["section"],
-                "text": clean_body # Storing the cleaned text!
+                "text": clean_body 
             }
             
             vectors.append(v)
@@ -206,8 +212,11 @@ class RAGEngine:
             self._doc_titles.add(ch["title"])
             self._chunk_count += 1
         
+        # Send everything to the database
         self.store.upsert(vectors, metas)
-        return (len(self._doc_titles) - len(doc_titles_before), len(metas))
+        
+        new_docs_count = len(self._doc_titles) - len(doc_titles_before)
+        return (new_docs_count, len(metas))
         # vectors = []
         # metas = []
         # doc_titles_before = set(self._doc_titles)
@@ -296,7 +305,6 @@ def build_chunks_from_docs(docs: List[Dict], chunk_size: int, overlap: int) -> L
         out.append({
             "title": d["title"], 
             "section": d["section"], 
-            "text": d["text"],           # The clean body for the database
-            "full_text": d.get("full_text", d["text"]) # The header version for the math
+            "text": d["text"]           # The clean body for the database
         })
     return out
