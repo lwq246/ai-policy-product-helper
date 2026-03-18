@@ -67,9 +67,6 @@ As seen in the Admin Panel, the system provides real-time observability:
 
 ## 📈 Future Roadmap
 
-- **PII Guardrails**  
-  Implement a masking layer to redact sensitive identifiers (IC numbers, addresses) before sending context to the cloud LLM, ensuring strict PDPA compliance.
-
 - **Semantic Reranking**  
   Integrate a Cross-Encoder to filter out "semantic noise" and improve precision for queries where keywords overlap across different policies.
 
