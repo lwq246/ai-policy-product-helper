@@ -1,5 +1,9 @@
 # AI Policy & Product Helper (RAG)
 
+## Demo Video
+
+https://youtu.be/pN73u8wdJvg
+
 A production-ready, local-first Retrieval-Augmented Generation (RAG) application. This system enables users to query company policies and product catalogs with high precision, offering verified citations and a polished user interface.
 
 ## 🚀 Quick Start (One Command)
