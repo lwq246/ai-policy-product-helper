@@ -61,14 +61,9 @@ docker compose run --rm -e PYTHONPATH=. backend pytest
 
 As seen in the Admin Panel, the system provides real-time observability:
 
-- **Retrieval Latency:** ~21ms
-  _Optimized via local Qdrant indexing._
-
-- **Generation Latency:** ~3.2s  
-  _Standard latency for cloud-based reasoning._
-
-- **Data Density**: Documents are intelligently chunked based on Markdown headers  
-  _Maintains semantic focus and prevents context fragmentation._
+- **Retrieval Latency:** ~21ms (Highly optimized via local Qdrant vector indexing).
+- **Generation Latency:** ~3.2s (Standard round-trip latency for cloud-based LLM reasoning).
+- **Data Density:** Documents are intelligently chunked based on Markdown headers to maintain semantic focus and prevent context fragmentation.
 
 ## 📈 Future Roadmap
 
